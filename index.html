@@ -83,7 +83,18 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 #msg,#vmsg{margin:0;min-height:1.2em;font-size:16px;text-align:center;color:var(--mauve);max-width:440px}
 #booth .wm{font-size:12px;letter-spacing:.3em;opacity:.9;margin-top:2px}
 #booth .vnm{font-size:40px;line-height:1.1}
-#booth .view{width:min(calc(100% + 16px),calc(46dvh*var(--ar,.75)),460px);aspect-ratio:var(--ar,.75);border-radius:4px}
+#booth .view{width:min(100%,calc(50dvh*var(--ar,.75)),420px);aspect-ratio:var(--ar,.75);border-radius:4px}
+#booth{padding-top:12px}
+#booth .top{position:absolute;top:8px;left:10px;width:auto;padding:0}
+#booth #back{font-size:34px;line-height:1;padding:0 12px 4px}
+@media (orientation:landscape) and (max-height:620px){
+  #booth.on{display:grid;grid-template-columns:minmax(0,1fr) 250px;column-gap:14px;align-content:center;justify-items:center;padding:8px 14px}
+  #booth .view{grid-column:1;grid-row:1/12;width:auto;height:calc(100dvh - 18px);max-width:100%;max-height:calc(100dvh - 18px);justify-self:center}
+  #booth .thumbs,#booth .ctl,#booth .fname,#booth #extra,#booth #thint,#booth #msg,#booth .vnm{grid-column:2}
+  #booth .wm,#booth .fdate{display:none}
+  #booth .vnm{font-size:28px}
+  #booth .top{top:4px;left:6px}
+}
 /* kamera langsung di dalam frame */
 .cd{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:150px;font-weight:600;color:#fff;text-shadow:0 4px 28px rgba(0,0,0,.65);pointer-events:none;background:rgba(0,0,0,.12)}
 .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
@@ -254,7 +265,7 @@ button.th:has(img){cursor:pointer}
 </section>
 
 <section id="booth">
-  <div class="top"><button class="link" id="back">‹ Pilih frame</button><span></span></div>
+  <div class="top"><button class="link" id="back" aria-label="Pilih frame">‹</button></div>
   <small class="wm">WEDDING MEMORIES OF</small>
   <span class="script vnm" id="bnm"></span>
   <p class="fdate" id="bdt"></p>
@@ -366,19 +377,20 @@ let ctx=cv.getContext('2d'),K=cv.width/1080;
 let stream=null,facing='user',fi=0,frozen=false,raf=0,busy=false,photos=[],seq=0;
 const FRAMES=[
   {name:'1 Foto',win:[[70,70,940,1250]]},
-  {name:'2 Foto',win:[[80,70,920,630],[80,730,920,630]]},
-  {name:'3 Foto',win:[[110,60,860,410],[110,490,860,410],[110,920,860,410]]}
+  {name:'2 Foto',win:[[134,60,812,650],[134,740,812,650]]},
+  {name:'3 Foto',win:[[260,50,560,430],[260,500,560,430],[260,950,560,430]]}
 ];
 
 /* ----- menggambar frame ----- */
-function cover(s,x,y,w,h,pathFn,mirror,ph){
+function cover(s,x,y,w,h,pathFn,mirror,ph,fit){
   ctx.save();pathFn();ctx.clip();
   if(!s){
     if(ph==='dark'){ctx.fillStyle='#1b1b1b';ctx.fillRect(x,y,w,h)}
     else{const g=ctx.createLinearGradient(0,y,0,y+h);g.addColorStop(0,'#3a2a30');g.addColorStop(1,'#1b1b1b');ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
       ctx.fillStyle='rgba(248,238,224,.6)';ctx.textAlign='center';ctx.font="40px 'Cormorant Garamond',serif";ctx.fillText('Ketuk tombol kamera',x+w/2,y+h/2)}
   }else{
-    const sw=s.videoWidth||s.naturalWidth||s.width,sh=s.videoHeight||s.naturalHeight||s.height,r=Math.max(w/sw,h/sh),dw=sw*r,dh=sh*r;
+    const sw=s.videoWidth||s.naturalWidth||s.width,sh=s.videoHeight||s.naturalHeight||s.height,contain=fit&&Math.abs(sw/sh-w/h)>.03,r=contain?Math.min(w/sw,h/sh):Math.max(w/sw,h/sh),dw=sw*r,dh=sh*r;
+    if(fit&&contain){ctx.fillStyle='#1b1b1b';ctx.fillRect(x,y,w,h)}
     if(mirror){ctx.translate(x+w/2,0);ctx.scale(-1,1);ctx.translate(-(x+w/2),0)}
     ctx.drawImage(s,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
   }
@@ -404,7 +416,7 @@ function drawFrame(c,idx,items,live){
   const g=ctx.createLinearGradient(0,0,0,1620);g.addColorStop(0,'#f8eee2');g.addColorStop(1,'#f0dfce');ctx.fillStyle=g;ctx.fillRect(0,0,1080,1620);
   FRAMES[idx].win.forEach((w,i)=>{
     const path=()=>{ctx.beginPath();ctx.roundRect(w[0],w[1],w[2],w[3],12)};
-    if(items&&items[i])cover(items[i],w[0],w[1],w[2],w[3],path,false,'dark');
+    if(items&&items[i])cover(items[i],w[0],w[1],w[2],w[3],path,false,'dark',true);
     else if(live&&live.idx===i)cover(live.src,w[0],w[1],w[2],w[3],path,live.mirror,'wait');
     else cover(null,w[0],w[1],w[2],w[3],path,false,'dark');
   });
@@ -444,7 +456,7 @@ const nWin=()=>FRAMES[fi].win.length;
 const slotIdx=()=>retake!=null?retake:photos.length;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 let curAr=.75;
-function setAr(){const w=FRAMES[fi].win[0];curAr=w[2]/w[3];$('#view').style.setProperty('--ar',curAr.toFixed(4));const L=$('#lv');L.width=720;L.height=Math.round(720/curAr)}
+function setAr(){{const w0=FRAMES[fi].win[0];curAr=w0[2]/w0[3]}$('#view').style.setProperty('--ar',curAr.toFixed(4));const L=$('#lv');L.width=720;L.height=Math.round(720/curAr);if(!stream)render()}
 function drawLive(src){
   const L=$('#lv'),x=L.getContext('2d'),W=L.width,H=L.height;
   x.setTransform(1,0,0,1,0,0);x.fillStyle='#1b1b1b';x.fillRect(0,0,W,H);
@@ -501,6 +513,7 @@ function updProg(){
   $('#thint').style.display=(has&&n>1)?'':'none';
   $('#shot').setAttribute('aria-label',n>1?'Ambil foto '+k+' dari '+n:'Ambil foto');
 }
+addEventListener('resize',()=>{const b=$('#booth');if(b&&b.classList.contains('on'))setAr()});
 function openBooth(){
   photos=[];retake=null;frozen=false;counting=false;$('#msg').textContent='';$('#shot').disabled=false;
   setAr();buildThumbs();updProg();show('booth');startCam();
