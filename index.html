@@ -83,7 +83,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 #msg,#vmsg{margin:0;min-height:1.2em;font-size:16px;text-align:center;color:var(--mauve);max-width:440px}
 #booth .wm{font-size:12px;letter-spacing:.3em;opacity:.9;margin-top:2px}
 #booth .vnm{font-size:40px;line-height:1.1}
-#booth .view{width:min(100%,calc(44dvh*var(--ar,.75)),400px);aspect-ratio:var(--ar,.75);border-radius:4px}
+#booth .view{width:min(calc(100% + 16px),calc(46dvh*var(--ar,.75)),460px);aspect-ratio:var(--ar,.75);border-radius:4px}
 /* kamera langsung di dalam frame */
 .cd{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:150px;font-weight:600;color:#fff;text-shadow:0 4px 28px rgba(0,0,0,.65);pointer-events:none;background:rgba(0,0,0,.12)}
 .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
@@ -399,27 +399,12 @@ function floral(cx,cy,f){
   ctx.fillStyle='#c8a45c';[[-110,40],[96,-10],[30,64],[-60,56],[110,-80]].forEach(p=>{ctx.beginPath();ctx.arc(p[0],p[1],6,0,6.283);ctx.fill()});
   ctx.restore();
 }
-/* foto tampil utuh (tanpa dipotong); sisa ruang diisi versi blur dari foto yang sama */
-function fitIn(s,x,y,w,h,pathFn){
-  const sw=s.width,sh=s.height;
-  if(Math.abs(sw/sh-w/h)<.03){cover(s,x,y,w,h,pathFn,false,'dark');return}
-  ctx.save();pathFn();ctx.clip();
-  const t=document.createElement('canvas');t.width=24;t.height=Math.max(8,Math.round(24*h/w));
-  const tx=t.getContext('2d'),rc=Math.max(t.width/sw,t.height/sh);
-  tx.drawImage(s,(t.width-sw*rc)/2,(t.height-sh*rc)/2,sw*rc,sh*rc);
-  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-  ctx.drawImage(t,x,y,w,h);
-  ctx.fillStyle='rgba(30,8,16,.28)';ctx.fillRect(x,y,w,h);
-  const r=Math.min(w/sw,h/sh),dw=sw*r,dh=sh*r;
-  ctx.drawImage(s,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
-  ctx.restore();
-}
 function drawFrame(c,idx,items,live){
   ctx=c.getContext('2d');K=c.width/1080;ctx.setTransform(K,0,0,K,0,0);ctx.clearRect(0,0,1080,1620);
   const g=ctx.createLinearGradient(0,0,0,1620);g.addColorStop(0,'#f8eee2');g.addColorStop(1,'#f0dfce');ctx.fillStyle=g;ctx.fillRect(0,0,1080,1620);
   FRAMES[idx].win.forEach((w,i)=>{
     const path=()=>{ctx.beginPath();ctx.roundRect(w[0],w[1],w[2],w[3],12)};
-    if(items&&items[i])fitIn(items[i],w[0],w[1],w[2],w[3],path);
+    if(items&&items[i])cover(items[i],w[0],w[1],w[2],w[3],path,false,'dark');
     else if(live&&live.idx===i)cover(live.src,w[0],w[1],w[2],w[3],path,live.mirror,'wait');
     else cover(null,w[0],w[1],w[2],w[3],path,false,'dark');
   });
@@ -458,8 +443,8 @@ let camOK=true,counting=false,auto=false,retake=null,camReq=0;
 const nWin=()=>FRAMES[fi].win.length;
 const slotIdx=()=>retake!=null?retake:photos.length;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
-const VAR=.75;
-function setAr(){$('#view').style.setProperty('--ar',VAR);const L=$('#lv');L.width=720;L.height=Math.round(720/VAR)}
+let curAr=.75;
+function setAr(){const w=FRAMES[fi].win[0];curAr=w[2]/w[3];$('#view').style.setProperty('--ar',curAr.toFixed(4));const L=$('#lv');L.width=720;L.height=Math.round(720/curAr)}
 function drawLive(src){
   const L=$('#lv'),x=L.getContext('2d'),W=L.width,H=L.height;
   x.setTransform(1,0,0,1,0,0);x.fillStyle='#1b1b1b';x.fillRect(0,0,W,H);
@@ -487,8 +472,8 @@ function camFail(){camOK=false;stream=null;cancelAnimationFrame(raf);render();$(
 function stopCam(){camReq++;cancelAnimationFrame(raf);raf=0;counting=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}vid.srcObject=null;const c=$('#cd');if(c)c.style.display='none';const sh=$('#shot');if(sh)sh.classList.remove('cnt')}
 function snap(){
   const vw=vid.videoWidth,vh=vid.videoHeight;
-  let cw=vw,ch=vh;if(vw/vh>VAR)cw=vh*VAR;else ch=vw/VAR;
-  const r=Math.min(1,1440/ch),c=document.createElement('canvas');c.width=Math.round(cw*r);c.height=Math.round(ch*r);
+  let cw=vw,ch=vh;if(vw/vh>curAr)cw=vh*curAr;else ch=vw/curAr;
+  const r=Math.min(1,1600/Math.max(cw,ch)),c=document.createElement('canvas');c.width=Math.round(cw*r);c.height=Math.round(ch*r);
   const x=c.getContext('2d');if(facing==='user'){x.translate(c.width,0);x.scale(-1,1)}
   x.drawImage(vid,(vw-cw)/2,(vh-ch)/2,cw,ch,0,0,c.width,c.height);return c;
 }
