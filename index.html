@@ -103,6 +103,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .thumbs{display:flex;gap:10px;justify-content:center;flex:none}
 .th{width:54px;height:54px;padding:0;border-radius:8px;overflow:hidden;position:relative;background:rgba(0,0,0,.35);color:rgba(248,238,224,.7);font-size:20px;font-weight:600;border:2px solid rgba(248,238,224,.3);cursor:default}
 .th img{width:100%;height:100%;object-fit:cover;display:block}
+.th .x{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:15px;line-height:20px;text-align:center;font-weight:400;cursor:pointer;z-index:2}
+.th.pv{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
 .th.on{border-color:var(--gold);box-shadow:0 0 0 2px rgba(200,164,92,.35)}
 button.th:has(img){cursor:pointer}
 .ctl{display:flex;align-items:center;justify-content:center;gap:36px;flex:none}
@@ -279,8 +281,8 @@ button.th:has(img){cursor:pointer}
     <button class="rnd" id="pickBtn" aria-label="Pilih dari galeri"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="10" r="1.6" fill="currentColor"/><path d="M4 18l5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
   </div>
   <p class="fname" id="prog">Siap difoto</p>
-  <div class="row" id="extra" style="display:none"><button class="link" id="undo">Ulang terakhir</button><button class="link" id="auto">Otomatis: mati</button><button class="link" id="reset">Ulangi dari awal</button></div>
-  <p class="hintt" id="thint" style="display:none">Ketuk foto kecil untuk mengulang foto itu saja</p>
+  <div class="row" id="extra" style="display:none"><button class="link" id="auto">Otomatis: mati</button></div>
+  <p class="hintt" id="thint" style="display:none">Ketuk foto kecil untuk melihat · ketuk × untuk menghapus dan memotret ulang</p>
   <p id="msg"></p>
   <input type="file" id="cam" accept="image/*" capture="user" hidden>
   <input type="file" id="pick" accept="image/*" hidden>
@@ -453,7 +455,9 @@ $('#fpick').onclick=()=>{fi=fSel;openBooth()};
 const vid=$('#vid');
 let camOK=true,counting=false,auto=false,retake=null,camReq=0;
 const nWin=()=>FRAMES[fi].win.length;
-const slotIdx=()=>retake!=null?retake:photos.length;
+const slotIdx=()=>{if(retake!=null)return retake;const k=photos.findIndex(p=>!p);return k<0?photos.length:k};
+const cnt=()=>photos.filter(Boolean).length;
+let prev=null;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 let curAr=.75;
 function setAr(){{const w0=FRAMES[fi].win[0];curAr=w0[2]/w0[3]}$('#view').style.setProperty('--ar',curAr.toFixed(4));const L=$('#lv');L.width=720;L.height=Math.round(720/curAr);if(!stream)render()}
@@ -465,8 +469,14 @@ function drawLive(src){
   if(facing==='user'){x.translate(W,0);x.scale(-1,1)}
   x.drawImage(src,(W-dw)/2,(H-dh)/2,dw,dh);
 }
-function render(){drawLive(null)}
-function liveRender(){drawLive(vid.videoWidth?vid:null)}
+function drawPhotoView(c,n){
+  const L=$('#lv'),x=L.getContext('2d'),W=L.width,H=L.height;x.setTransform(1,0,0,1,0,0);x.fillStyle='#1b1b1b';x.fillRect(0,0,W,H);
+  const r=Math.max(W/c.width,H/c.height),dw=c.width*r,dh=c.height*r;x.drawImage(c,(W-dw)/2,(H-dh)/2,dw,dh);
+  x.font="600 22px 'Cormorant Garamond',serif";x.textAlign='center';const t='Foto '+n+' · ketuk lagi untuk kembali',tw=x.measureText(t).width+28;
+  x.fillStyle='rgba(0,0,0,.6)';x.beginPath();x.roundRect((W-tw)/2,H-50,tw,34,17);x.fill();x.fillStyle='#fff';x.fillText(t,W/2,H-27);
+}
+function render(){if(prev!=null&&photos[prev])drawPhotoView(photos[prev],prev+1);else drawLive(null)}
+function liveRender(){if(prev!=null&&photos[prev])drawPhotoView(photos[prev],prev+1);else drawLive(vid.videoWidth?vid:null)}
 function loop(){cancelAnimationFrame(raf);const f=()=>{if(!stream)return;liveRender();raf=requestAnimationFrame(f)};f()}
 async function startCam(){
   render();
@@ -496,37 +506,43 @@ function buildThumbs(){
   for(let i=0;i<nWin();i++){
     const b=document.createElement('button');b.type='button';b.className='th';
     if(photos[i]){
-      const im=new Image();im.alt='Foto '+(i+1);im.src=thumbOf(photos[i]);b.appendChild(im);b.setAttribute('aria-label','Ulang foto '+(i+1));
-      b.onclick=()=>{if(counting)return;retake=(retake===i?null:i);buildThumbs();updProg();if(stream)loop();else render()};
+      const im=new Image();im.alt='Foto '+(i+1);im.src=thumbOf(photos[i]);b.appendChild(im);b.setAttribute('aria-label','Lihat foto '+(i+1));
+      const x=document.createElement('span');x.className='x';x.textContent='×';x.setAttribute('role','button');x.setAttribute('aria-label','Hapus foto '+(i+1));
+      x.onclick=e=>{e.stopPropagation();if(counting)return;delPhoto(i)};b.appendChild(x);
+      b.onclick=()=>{if(counting)return;prev=(prev===i?null:i);buildThumbs();if(stream)loop();else render()};
     }else{b.textContent=i+1;b.tabIndex=-1;b.setAttribute('aria-hidden','true')}
-    if(i===slotIdx())b.classList.add('on');
+    if(prev!=null){if(i===prev)b.classList.add('pv')}else if(i===slotIdx())b.classList.add('on');
     box.appendChild(b);
   }
   box.style.display=nWin()>1?'flex':'none';
 }
+function delPhoto(i){
+  photos[i]=null;while(photos.length&&!photos[photos.length-1])photos.pop();
+  prev=null;retake=null;$('#shot').disabled=false;buildThumbs();updProg();if(stream)loop();else render();
+}
 function updProg(){
-  const n=nWin(),has=photos.length>0,k=Math.min(slotIdx()+1,n);
+  const n=nWin(),has=cnt()>0,k=Math.min(slotIdx()+1,n);
   $('#prog').textContent=n>1?'Foto '+k+' dari '+n:'Siap difoto';
   $('#extra').style.display=(has||n>1)?'flex':'none';
-  $('#undo').style.display=has?'':'none';$('#reset').style.display=has?'':'none';
-  $('#auto').style.display=n>1?'':'none';
+    $('#auto').style.display=n>1?'':'none';
   $('#thint').style.display=(has&&n>1)?'':'none';
   $('#shot').setAttribute('aria-label',n>1?'Ambil foto '+k+' dari '+n:'Ambil foto');
 }
 addEventListener('resize',()=>{const b=$('#booth');if(b&&b.classList.contains('on'))setAr()});
 function openBooth(){
-  photos=[];retake=null;frozen=false;counting=false;$('#msg').textContent='';$('#shot').disabled=false;
+  photos=[];retake=null;prev=null;frozen=false;counting=false;$('#msg').textContent='';$('#shot').disabled=false;
   setAr();buildThumbs();updProg();show('booth');startCam();
 }
 function fitImg(im){const m=1600,sw=im.naturalWidth,sh=im.naturalHeight,r=Math.min(1,m/Math.max(sw,sh));const c=document.createElement('canvas');c.width=Math.round(sw*r);c.height=Math.round(sh*r);c.getContext('2d').drawImage(im,0,0,c.width,c.height);return c}
 function finalize(){
+  if(cnt()<nWin())return;
   cancelAnimationFrame(raf);cv.width=1080;cv.height=1620;
   drawFrame(cv,fi,photos,null);frozen=true;shotUrl=cv.toDataURL('image/jpeg',.9);resetVoice();show('voice');
 }
 function place(c){
-  if(retake!=null){photos[retake]=c;retake=null}else photos.push(c);
+  prev=null;photos[slotIdx()]=c;retake=null;
   buildThumbs();updProg();if(!stream)render();
-  if(photos.length>=nWin()){$('#shot').disabled=true;setTimeout(finalize,800)}
+  if(cnt()>=nWin()){$('#shot').disabled=true;setTimeout(finalize,800)}
 }
 async function countdown(sec){
   const el=$('#cd');el.style.display='flex';
@@ -537,12 +553,13 @@ $('#shot').onclick=async()=>{
   if(!camOK||!stream){$('#cam').click();return}
   if(counting){counting=false;return}
   if(!vid.videoWidth){$('#msg').textContent='Kamera sedang disiapkan, tunggu sebentar.';return}
+  if(prev!=null){prev=null;buildThumbs();if(stream)loop()}
   counting=true;$('#shot').classList.add('cnt');$('#msg').textContent='';
   try{
     while(counting){
       if(!await countdown(3))break;
       flash();place(snap());
-      if(!auto||photos.length>=nWin())break;
+      if(!auto||cnt()>=nWin())break;
       await wait(900);
     }
   }finally{counting=false;$('#shot').classList.remove('cnt');$('#cd').style.display='none'}
@@ -557,8 +574,6 @@ const onPhoto=async e=>{
 };
 $('#cam').onchange=$('#pick').onchange=onPhoto;
 $('#pickBtn').onclick=()=>{if(!counting)$('#pick').click()};
-$('#undo').onclick=()=>{if(counting||!photos.length)return;photos.pop();retake=null;$('#shot').disabled=false;buildThumbs();updProg();if(stream)loop();else render()};
-$('#reset').onclick=()=>{if(counting)return;photos=[];retake=null;$('#shot').disabled=false;$('#msg').textContent=camOK?'':$('#msg').textContent;buildThumbs();updProg();if(stream)loop();else render()};
 $('#vback').onclick=()=>{stopRec();openBooth()};
 
 /* rekam suara */
