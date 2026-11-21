@@ -414,7 +414,7 @@ function floral(cx,cy,f){
   ctx.restore();
 }
 function drawFrame(c,idx,items,live){
-  CW=FRAMES[idx].w||1080;c.width=Math.round(c.height*CW/1620);ctx=c.getContext('2d');K=c.height/1620;ctx.setTransform(K,0,0,K,0,0);ctx.clearRect(0,0,CW,1620);
+  CW=FRAMES[idx].w||1080;c.width=Math.round(c.height*CW/1620);ctx=c.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';K=c.height/1620;ctx.setTransform(K,0,0,K,0,0);ctx.clearRect(0,0,CW,1620);
   const g=ctx.createLinearGradient(0,0,0,1620);g.addColorStop(0,'#f8eee2');g.addColorStop(1,'#f0dfce');ctx.fillStyle=g;ctx.fillRect(0,0,CW,1620);
   FRAMES[idx].win.forEach((w,i)=>{
     const path=()=>{ctx.beginPath();ctx.roundRect(w[0],w[1],w[2],w[3],12)};
@@ -428,13 +428,19 @@ function drawFrame(c,idx,items,live){
   txt(names,1478,fs+"px 'Great Vibes',cursive",'#7b1530');
   txt(C.date.toUpperCase(),1545,"600 30px 'Cormorant Garamond',serif",'#9a6a79','6px');
 }
-function scaled(w,h,q){h=Math.round(w*cv.height/cv.width);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(cv,0,0,w,h);return c.toDataURL('image/jpeg',q)}
+function scaled(h,q){
+  /* gambar ulang frame langsung di ukuran tujuan supaya tulisan tetap tajam */
+  const t=document.createElement('canvas');t.height=h;drawFrame(t,fi,photos,null);
+  let u=t.toDataURL('image/jpeg',q);
+  while(u.length>800000&&q>.45){q-=.08;u=t.toDataURL('image/jpeg',q)}  /* batas dokumen Firestore 1 MB */
+  return u;
+}
 
 /* ----- halaman pilih frame (geser kiri kanan) ----- */
 const car=$('#car');let fSel=0,sraf=0;
 FRAMES.forEach((f,i)=>{
   const b=document.createElement('button');b.className='slide';b.setAttribute('aria-label','Frame '+f.name);
-  const c=document.createElement('canvas');c.width=360;c.height=540;b.appendChild(c);
+  const c=document.createElement('canvas');c.width=720;c.height=1080;b.appendChild(c);
   b.onclick=()=>b.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});
   car.appendChild(b);$('#fdots').appendChild(document.createElement('i'));
 });
@@ -460,11 +466,11 @@ const cnt=()=>photos.filter(Boolean).length;
 let prev=null;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 let curAr=.75;
-function setAr(){{const w0=FRAMES[fi].win[0];curAr=w0[2]/w0[3]}$('#view').style.setProperty('--ar',curAr.toFixed(4));const L=$('#lv');L.width=720;L.height=Math.round(720/curAr);if(!stream)render()}
+function setAr(){{const w0=FRAMES[fi].win[0];curAr=w0[2]/w0[3]}$('#view').style.setProperty('--ar',curAr.toFixed(4));const L=$('#lv');L.width=960;L.height=Math.round(960/curAr);if(!stream)render()}
 function drawLive(src){
   const L=$('#lv'),x=L.getContext('2d'),W=L.width,H=L.height;
   x.setTransform(1,0,0,1,0,0);x.fillStyle='#1b1b1b';x.fillRect(0,0,W,H);
-  if(!src){x.fillStyle='rgba(248,238,224,.6)';x.textAlign='center';x.font="26px 'Cormorant Garamond',serif";x.fillText(camOK?'Membuka kamera…':'Ketuk tombol kamera',W/2,H/2);return}
+  if(!src){x.fillStyle='rgba(248,238,224,.6)';x.textAlign='center';x.font=Math.round(W/28)+"px 'Cormorant Garamond',serif";x.fillText(camOK?'Membuka kamera…':'Ketuk tombol kamera',W/2,H/2);return}
   const sw=src.videoWidth,sh=src.videoHeight,r=Math.max(W/sw,H/sh),dw=sw*r,dh=sh*r;
   if(facing==='user'){x.translate(W,0);x.scale(-1,1)}
   x.drawImage(src,(W-dw)/2,(H-dh)/2,dw,dh);
@@ -472,8 +478,8 @@ function drawLive(src){
 function drawPhotoView(c,n){
   const L=$('#lv'),x=L.getContext('2d'),W=L.width,H=L.height;x.setTransform(1,0,0,1,0,0);x.fillStyle='#1b1b1b';x.fillRect(0,0,W,H);
   const r=Math.max(W/c.width,H/c.height),dw=c.width*r,dh=c.height*r;x.drawImage(c,(W-dw)/2,(H-dh)/2,dw,dh);
-  x.font="600 22px 'Cormorant Garamond',serif";x.textAlign='center';const t='Foto '+n+' · ketuk lagi untuk kembali',tw=x.measureText(t).width+28;
-  x.fillStyle='rgba(0,0,0,.6)';x.beginPath();x.roundRect((W-tw)/2,H-50,tw,34,17);x.fill();x.fillStyle='#fff';x.fillText(t,W/2,H-27);
+  const k=W/720;x.font="600 "+(22*k)+"px 'Cormorant Garamond',serif";x.textAlign='center';const t='Foto '+n+' · ketuk lagi untuk kembali',tw=x.measureText(t).width+28*k;
+  x.fillStyle='rgba(0,0,0,.6)';x.beginPath();x.roundRect((W-tw)/2,H-50*k,tw,34*k,17*k);x.fill();x.fillStyle='#fff';x.fillText(t,W/2,H-27*k);
 }
 function render(){if(prev!=null&&photos[prev])drawPhotoView(photos[prev],prev+1);else drawLive(null)}
 function liveRender(){if(prev!=null&&photos[prev])drawPhotoView(photos[prev],prev+1);else drawLive(vid.videoWidth?vid:null)}
@@ -534,7 +540,9 @@ function openBooth(){
   setAr();buildThumbs();updProg();show('booth');startCam();
 }
 function fitImg(im){const m=1600,sw=im.naturalWidth,sh=im.naturalHeight,r=Math.min(1,m/Math.max(sw,sh));const c=document.createElement('canvas');c.width=Math.round(sw*r);c.height=Math.round(sh*r);c.getContext('2d').drawImage(im,0,0,c.width,c.height);return c}
-function finalize(){
+async function finalize(){
+  if(cnt()<nWin())return;
+  try{await Promise.all([document.fonts.load("112px 'Great Vibes'"),document.fonts.load("600 30px 'Cormorant Garamond'")])}catch(e){}
   if(cnt()<nWin())return;
   cancelAnimationFrame(raf);cv.height=1620;
   drawFrame(cv,fi,photos,null);{const ar=cv.width/cv.height;document.documentElement.style.setProperty('--fa',ar.toFixed(4));document.documentElement.style.setProperty('--fk',(ar*1.5).toFixed(4))}frozen=true;shotUrl=cv.toDataURL('image/jpeg',.9);resetVoice();show('voice');
@@ -783,7 +791,7 @@ async function sendMoment(){
     const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
     
     await window.firebaseSetDoc(window.firebaseDoc(window.db, 'moment_data', id), {
-      photo: scaled(540, 810, .66)
+      photo: scaled(1350, .82)
     });
     
     if(vnData){
@@ -794,7 +802,7 @@ async function sendMoment(){
     
     await window.firebaseSetDoc(window.firebaseDoc(window.db, 'moments', id), {
       name: name.slice(0, 40),
-      thumb: scaled(270, 405, .6),
+      thumb: scaled(540, .72),
       hasVn: !!vnData,
       t: Date.now()
     });
